@@ -667,10 +667,12 @@
       let distanceFeet = 0;
       let stepCount = 0;
 
-      const SPEED_MAX = 6.0;
-      const STEP_BOOST = 0.62;
+      const SPEED_MAX = 4.0; // ~3.1 mph cap — brisk walk, not a sprint
+      const STEP_BOOST = 0.42;
       const STEP_MIN_TRAVEL = 14;
       const STEP_TIMEOUT_MS = 1000;
+      const MAX_SPEED_RISE = 1.35; // max belt-speed units gained per second
+      const IDEAL_STEP_MS = 320; // faster stepping yields diminishing boosts
 
       // belt speed (arbitrary units) → real walking pace.
       // ~4 units reads as a brisk ~3 mph walk.
@@ -751,12 +753,20 @@
         }
       }
 
-      function registerStep(foot, now, dotIndex) {
+      function registerStep(foot, now, dotIndex, strokeDy) {
         if (lastFoot === foot && now - lastStepMs < 150) return;
+
+        const sinceGlobal = lastStepMs > 0 ? now - lastStepMs : IDEAL_STEP_MS;
+        // Quick flurries add less per step; natural cadence adds more.
+        const cadenceFactor = Math.min(1, sinceGlobal / IDEAL_STEP_MS);
+        // Huge single-frame drags don't dump full boost in at once.
+        const strokeFactor = Math.min(1, Math.sqrt(strokeDy / STEP_MIN_TRAVEL) / 1.65);
+        const boost = STEP_BOOST * (0.35 + 0.65 * cadenceFactor) * strokeFactor;
+
         lastFoot = foot;
         lastStepMs = now;
         stepCount++;
-        targetSpeed = Math.min(SPEED_MAX, targetSpeed + STEP_BOOST);
+        targetSpeed = Math.min(SPEED_MAX, targetSpeed + boost);
         haptic(8);
 
         // brief visual ping on the stepping dot
@@ -777,7 +787,7 @@
         if (w.ready && dy > STEP_MIN_TRAVEL && now - w.lastStepTime > 150) {
           w.lastStepTime = now;
           w.ready = false;
-          registerStep(footName, now, dotIndex);
+          registerStep(footName, now, dotIndex, dy);
         }
         w.prevY = t.y;
       }
@@ -873,17 +883,17 @@
         // stop driving the belt if stepping pauses
         if (now - lastStepMs > STEP_TIMEOUT_MS) targetSpeed = 0;
 
-        // smooth ramp toward target (continuous glide, no snapping)
+        // Smooth ramp with a hard ceiling on how fast speed can climb.
         if (targetSpeed > beltSpeed) {
-          beltSpeed = Math.min(targetSpeed, beltSpeed + dt * 4.2);
+          const rise = Math.min(dt * 2.6, MAX_SPEED_RISE * dt);
+          beltSpeed = Math.min(targetSpeed, beltSpeed + rise);
         } else {
           beltSpeed = Math.max(targetSpeed, beltSpeed - dt * 1.6);
         }
-        // bleed the target down so a stale boost doesn't run forever
         if (targetSpeed > 0) targetSpeed = Math.max(0, targetSpeed - dt * 0.55);
 
         // ----- belt scroll: continuous, seamless, moving toward the viewer -----
-        beltOffset += beltSpeed * dt * 0.46;
+        beltOffset += beltSpeed * dt * 0.38;
         beltTexture.offset.y = beltOffset % 1; // safe: texture tiles seamlessly
         topRoller.rotation.x = beltOffset * 6.0;
         bottomRoller.rotation.x = beltOffset * 6.0;
@@ -893,7 +903,7 @@
         drawDisplayScreen(mph, displayActive);
         displayTexture.needsUpdate = true;
         screenMat.emissiveIntensity = displayActive
-          ? 0.75 + Math.min(beltSpeed, 6) * 0.07
+          ? 0.75 + Math.min(beltSpeed, SPEED_MAX) * 0.07
           : 0.38;
         statusLed.material.emissiveIntensity = displayActive ? 0.85 : 0.15;
         statusLed.material.color.setHex(displayActive ? 0x5dffb0 : 0x2a5c40);
