@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <title>Walking Pad Finger Walk</title>
+    <style>
+      :root {
+        --bg: #ffffff;
+        --panel: rgba(12, 20, 32, 0.78);
+        --line: rgba(255, 255, 255, 0.14);
+        --text: #e8f0ff;
+        --muted: #9ab0d1;
+        --good: #57f287;
+      }
+
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        touch-action: none;
+      }
+
+      #app {
+        position: fixed;
+        inset: 0;
+      }
+
+      #hud {
+        position: fixed;
+        top: env(safe-area-inset-top, 0);
+        left: 0;
+        right: 0;
+        padding: 14px 14px 0;
+        pointer-events: none;
+      }
+
+      #hud-panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 10px 12px;
+        backdrop-filter: blur(6px);
+      }
+
+      .row {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        margin: 4px 0;
+        gap: 12px;
+      }
+
+      .label {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .value {
+        font-size: 16px;
+        font-weight: 600;
+      }
+
+      #touch-layer {
+        position: fixed;
+        inset: 0;
+      }
+
+      .dot {
+        position: fixed;
+        width: 34px;
+        height: 34px;
+        margin-left: -17px;
+        margin-top: -17px;
+        border-radius: 50%;
+        pointer-events: none;
+        border: 2px solid rgba(255, 255, 255, 0.8);
+        background: rgba(87, 242, 135, 0.2);
+        box-shadow: 0 0 0 6px rgba(87, 242, 135, 0.08);
+        opacity: 0;
+        transform: scale(0.85);
+        transition: opacity 0.12s ease, transform 0.12s ease;
+      }
+
+      .dot.active {
+        opacity: 1;
+        transform: scale(1);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="touch-layer"></div>
+    <div id="hud">
+      <div id="hud-panel">
+        <div class="row">
+          <span class="label">Belt Speed</span>
+          <span id="speed" class="value">0.00</span>
+        </div>
+        <div class="row">
+          <span class="label">Cadence</span>
+          <span id="cadence" class="value">0 spm</span>
+        </div>
+        <div class="row">
+          <span class="label">Status</span>
+          <span id="status" class="value">Place 2 fingers to walk</span>
+        </div>
+      </div>
+    </div>
+    <script type="module">
+      import * as THREE from "https://unpkg.com/three@0.165.0/build/three.module.js";
+
+      const app = document.getElementById("app");
+      const touchLayer = document.getElementById("touch-layer");
+      const speedEl = document.getElementById("speed");
+      const cadenceEl = document.getElementById("cadence");
+      const statusEl = document.getElementById("status");
+
+      const dotA = document.createElement("div");
+      const dotB = document.createElement("div");
+      dotA.className = "dot";
+      dotB.className = "dot";
+      touchLayer.appendChild(dotA);
+      touchLayer.appendChild(dotB);
+
+      // --- Three.js scene setup ---
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.05;
+      app.appendChild(renderer.domElement);
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xffffff);
+      scene.fog = new THREE.Fog(0xf5f7fb, 8, 24);
+
+      const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 100);
+      // Keep the pad vertical on screen, but with perspective depth.
+      camera.position.set(0, 3.35, 5.9);
+      camera.lookAt(0, 0.15, 0);
+
+      const ambient = new THREE.AmbientLight(0xffffff, 0.66);
+      scene.add(ambient);
+
+      const hemi = new THREE.HemisphereLight(0xeaf2ff, 0xadb6c4, 0.5);
+      scene.add(hemi);
+
+      const key = new THREE.DirectionalLight(0xffffff, 1.25);
+      key.position.set(2.9, 5.6, 4.8);
+      key.castShadow = true;
+      key.shadow.mapSize.set(1024, 1024);
+      key.shadow.camera.near = 0.1;
+      key.shadow.camera.far = 20;
+      key.shadow.camera.left = -4;
+      key.shadow.camera.right = 4;
+      key.shadow.camera.top = 4;
+      key.shadow.camera.bottom = -4;
+      scene.add(key);
+
+      const rim = new THREE.DirectionalLight(0xeff5ff, 0.5);
+      rim.position.set(-3.5, 2.2, -3.8);
+      scene.add(rim);
+
+      // Ground
+      const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(30, 30),
+        new THREE.MeshStandardMaterial({ color: 0xf7f9fd, roughness: 0.98, metalness: 0.0 })
+      );
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = -0.55;
+      ground.receiveShadow = true;
+      scene.add(ground);
+
+      // Walking pad group
+      const padGroup = new THREE.Group();
+      padGroup.rotation.x = 0.03;
+      scene.add(padGroup);
+
+      const base = new THREE.Mesh(
+        new THREE.BoxGeometry(1.34, 0.34, 3.4),
+        new THREE.MeshStandardMaterial({ color: 0x262d3a, roughness: 0.42, metalness: 0.55 })
+      );
+      base.position.y = -0.06;
+      base.castShadow = true;
+      base.receiveShadow = true;
+      padGroup.add(base);
+
+      // Slightly inset body cover to fake rounded product edges.
+      const bodyCover = new THREE.Mesh(
+        new THREE.BoxGeometry(1.22, 0.2, 3.18),
+        new THREE.MeshStandardMaterial({ color: 0x313a4a, roughness: 0.4, metalness: 0.48 })
+      );
+      bodyCover.position.y = 0.045;
+      bodyCover.castShadow = true;
+      bodyCover.receiveShadow = true;
+      padGroup.add(bodyCover);
+
+      // Create a belt texture so the deck feels like a moving treadmill belt.
+      const beltCanvas = document.createElement("canvas");
+      beltCanvas.width = 256;
+      beltCanvas.height = 1024;
+      const beltCtx = beltCanvas.getContext("2d");
+      beltCtx.fillStyle = "#0f1115";
+      beltCtx.fillRect(0, 0, beltCanvas.width, beltCanvas.height);
+      for (let y = 0; y < beltCanvas.height; y += 30) {
+        beltCtx.fillStyle = y % 60 === 0 ? "#1f242d" : "#171b22";
+        beltCtx.fillRect(0, y, beltCanvas.width, 16);
+      }
+      for (let y = 0; y < beltCanvas.height; y += 90) {
+        beltCtx.fillStyle = "rgba(255,255,255,0.08)";
+        beltCtx.fillRect(16, y + 2, beltCanvas.width - 32, 2);
+      }
+      const beltTexture = new THREE.CanvasTexture(beltCanvas);
+      beltTexture.wrapS = THREE.RepeatWrapping;
+      beltTexture.wrapT = THREE.RepeatWrapping;
+      beltTexture.repeat.set(1, 2.4);
+
+      const deck = new THREE.Mesh(
+        new THREE.BoxGeometry(0.88, 0.12, 2.95),
+        new THREE.MeshStandardMaterial({
+          color: 0x090b0e,
+          map: beltTexture,
+          roughness: 0.82,
+          metalness: 0.03,
+        })
+      );
+      deck.position.y = 0.11;
+      deck.receiveShadow = true;
+      padGroup.add(deck);
+
+      const sideRailMaterial = new THREE.MeshStandardMaterial({
+        color: 0x3d495f,
+        roughness: 0.38,
+        metalness: 0.62,
+      });
+
+      const railL = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 3.02, 24), sideRailMaterial);
+      railL.rotation.x = Math.PI / 2;
+      railL.position.set(0.51, 0.18, 0);
+      railL.castShadow = true;
+      padGroup.add(railL);
+
+      const railR = railL.clone();
+      railR.position.x = -0.5;
+      padGroup.add(railR);
+
+      // Front/back rollers add realism.
+      const rollerMat = new THREE.MeshStandardMaterial({
+        color: 0xa7b0bf,
+        roughness: 0.28,
+        metalness: 0.84,
+      });
+      const frontRoller = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.84, 26), rollerMat);
+      frontRoller.rotation.x = Math.PI / 2;
+      frontRoller.position.set(0, 0.09, -1.46);
+      frontRoller.castShadow = true;
+      padGroup.add(frontRoller);
+
+      const rearRoller = frontRoller.clone();
+      rearRoller.position.z = 1.46;
+      padGroup.add(rearRoller);
+
+      // Small feet to lift the body off the floor plane.
+      const footGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.04, 18);
+      const footMat = new THREE.MeshStandardMaterial({ color: 0x1d2431, roughness: 0.78, metalness: 0.08 });
+      const footOffsets = [
+        [0.5, -0.25, -1.45],
+        [-0.5, -0.25, -1.45],
+        [0.5, -0.25, 1.45],
+        [-0.5, -0.25, 1.45],
+      ];
+      for (const [x, y, z] of footOffsets) {
+        const foot = new THREE.Mesh(footGeo, footMat);
+        foot.position.set(x, y, z);
+        foot.castShadow = true;
+        foot.receiveShadow = true;
+        padGroup.add(foot);
+      }
+
+      const indicator = new THREE.Mesh(
+        new THREE.BoxGeometry(0.6, 0.06, 0.16),
+        new THREE.MeshStandardMaterial({
+          color: 0x1f86ff,
+          emissive: 0x0f3c71,
+          emissiveIntensity: 0.45,
+          roughness: 0.3,
+          metalness: 0.6,
+        })
+      );
+      indicator.position.set(0, 0.2, -1.18);
+      indicator.castShadow = true;
+      padGroup.add(indicator);
+
+      // --- Finger walking interaction ---
+      const touches = new Map();
+      const DOTS = [dotA, dotB];
+
+      const walkers = {
+        left: { active: false, id: null, prevY: 0, lastStepTime: 0, yDirReady: true },
+        right: { active: false, id: null, prevY: 0, lastStepTime: 0, yDirReady: true },
+      };
+
+      let beltSpeed = 0;
+      let targetSpeed = 0;
+      let cadenceSpm = 0;
+      let lastFoot = null;
+      let lastGlobalStepMs = 0;
+      let stepIntervals = [];
+
+      const STEP_MIN_TRAVEL = 18;
+      const STEP_TIMEOUT_MS = 1150;
+      const SPEED_MAX = 8.0;
+      const SPEED_DECAY = 1.25;
+      const STEP_BOOST = 0.48;
+
+      function setDot(index, x, y, active) {
+        const d = DOTS[index];
+        d.style.left = `${x}px`;
+        d.style.top = `${y}px`;
+        d.classList.toggle("active", active);
+      }
+
+      function sortedTouchList() {
+        const arr = Array.from(touches.values());
+        arr.sort((a, b) => a.x - b.x);
+        return arr;
+      }
+
+      function applyTouchAssignment() {
+        const arr = sortedTouchList();
+        const left = arr[0];
+        const right = arr[1];
+
+        if (!left || !right) {
+          walkers.left.active = false;
+          walkers.right.active = false;
+          walkers.left.id = null;
+          walkers.right.id = null;
+          setDot(0, 0, 0, false);
+          setDot(1, 0, 0, false);
+          return;
+        }
+
+        const now = performance.now();
+
+        if (walkers.left.id !== left.id) {
+          walkers.left.prevY = left.y;
+          walkers.left.yDirReady = true;
+          walkers.left.lastStepTime = now - STEP_TIMEOUT_MS;
+        }
+        if (walkers.right.id !== right.id) {
+          walkers.right.prevY = right.y;
+          walkers.right.yDirReady = true;
+          walkers.right.lastStepTime = now - STEP_TIMEOUT_MS;
+        }
+
+        walkers.left.active = true;
+        walkers.right.active = true;
+        walkers.left.id = left.id;
+        walkers.right.id = right.id;
+
+        setDot(0, left.x, left.y, true);
+        setDot(1, right.x, right.y, true);
+      }
+
+      function registerStep(foot, now) {
+        if (lastFoot === foot && now - lastGlobalStepMs < 160) {
+          return;
+        }
+
+        if (lastGlobalStepMs > 0) {
+          const interval = now - lastGlobalStepMs;
+          if (interval > 120 && interval < 1200) {
+            stepIntervals.push(interval);
+            if (stepIntervals.length > 8) stepIntervals.shift();
+            const avg = stepIntervals.reduce((a, b) => a + b, 0) / stepIntervals.length;
+            cadenceSpm = Math.round(60000 / avg);
+          }
+        }
+
+        lastFoot = foot;
+        lastGlobalStepMs = now;
+        targetSpeed = Math.min(SPEED_MAX, targetSpeed + STEP_BOOST);
+      }
+
+      function updateWalker(w, footName, now) {
+        if (!w.active) return;
+        const t = touches.get(w.id);
+        if (!t) return;
+
+        const dy = t.y - w.prevY;
+
+        // Step pattern: move finger up then a quick down stroke.
+        if (dy < -2) {
+          w.yDirReady = true;
+        }
+        if (w.yDirReady && dy > STEP_MIN_TRAVEL && now - w.lastStepTime > 160) {
+          w.lastStepTime = now;
+          w.yDirReady = false;
+          registerStep(footName, now);
+        }
+
+        w.prevY = t.y;
+      }
+
+      function handleTouchEvent(ev) {
+        ev.preventDefault();
+        for (const touch of ev.touches) {
+          touches.set(touch.identifier, {
+            id: touch.identifier,
+            x: touch.clientX,
+            y: touch.clientY,
+          });
+        }
+
+        const activeIds = new Set(Array.from(ev.touches).map((t) => t.identifier));
+        for (const id of touches.keys()) {
+          if (!activeIds.has(id)) touches.delete(id);
+        }
+
+        applyTouchAssignment();
+      }
+
+      touchLayer.addEventListener("touchstart", handleTouchEvent, { passive: false });
+      touchLayer.addEventListener("touchmove", handleTouchEvent, { passive: false });
+      touchLayer.addEventListener("touchend", handleTouchEvent, { passive: false });
+      touchLayer.addEventListener("touchcancel", handleTouchEvent, { passive: false });
+
+      // --- Render/update loop ---
+      let lastTime = performance.now();
+      let beltOffset = 0;
+
+      function animate(now) {
+        const dt = Math.min((now - lastTime) / 1000, 0.05);
+        lastTime = now;
+
+        updateWalker(walkers.left, "left", now);
+        updateWalker(walkers.right, "right", now);
+
+        if (now - lastGlobalStepMs > STEP_TIMEOUT_MS) {
+          targetSpeed = 0;
+          cadenceSpm = Math.max(0, cadenceSpm - dt * 48);
+          if (cadenceSpm < 1) cadenceSpm = 0;
+        }
+
+        if (targetSpeed > beltSpeed) {
+          beltSpeed = Math.min(targetSpeed, beltSpeed + dt * 3.6);
+        } else {
+          beltSpeed = Math.max(targetSpeed, beltSpeed - dt * SPEED_DECAY);
+        }
+
+        if (targetSpeed > 0) {
+          targetSpeed = Math.max(0, targetSpeed - dt * 0.46);
+        }
+
+        beltOffset += beltSpeed * dt * 0.34;
+        beltTexture.offset.y = beltOffset % 1;
+        frontRoller.rotation.z += beltSpeed * dt * 0.6;
+        rearRoller.rotation.z += beltSpeed * dt * 0.6;
+
+        // Subtle chassis vibration based on speed.
+        padGroup.position.y = Math.sin(now * 0.018) * beltSpeed * 0.0019;
+        indicator.material.emissiveIntensity = 0.3 + beltSpeed * 0.11;
+
+        speedEl.textContent = beltSpeed.toFixed(2);
+        cadenceEl.textContent = `${Math.round(cadenceSpm)} spm`;
+
+        if (touches.size < 2) {
+          statusEl.textContent = "Place 2 fingers to walk";
+          statusEl.style.color = "var(--text)";
+        } else if (beltSpeed > 0.12) {
+          statusEl.textContent = "Walking";
+          statusEl.style.color = "var(--good)";
+        } else {
+          statusEl.textContent = "Ready - alternate finger steps";
+          statusEl.style.color = "var(--text)";
+        }
+
+        renderer.render(scene, camera);
+        requestAnimationFrame(animate);
+      }
+
+      requestAnimationFrame(animate);
+
+      function onResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+      window.addEventListener("resize", onResize);
+    </script>
+  </body>
+</html>
