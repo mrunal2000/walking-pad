@@ -8,6 +8,12 @@
     />
     <title>Walking Pad</title>
     <meta name="ext-resource-dependency" content="https://unpkg.com/three@0.165.0/build/three.module.js" data-resource-id="three" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
     <template id="__bundler_thumbnail" data-bg-color="#ffffff">
       <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
         <rect width="1200" height="800" fill="#ffffff" />
@@ -28,16 +34,17 @@
     </template>
     <style>
       :root {
-        --ink: #1b1f26;
-        --muted: #8b929c;
-        --hair: rgba(27, 31, 38, 0.08);
-        --glass: rgba(20, 22, 26, 0.82);
-        --accent: oklch(0.64 0.07 195);
-        --accent-soft: oklch(0.64 0.07 195 / 0.14);
+        --ink: #14161a;
+        --muted: #9aa0aa;
+        --line: rgba(20, 22, 26, 0.1);
+        --accent: oklch(0.66 0.085 195);
+        --accent-soft: oklch(0.66 0.085 195 / 0.16);
+        --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
       }
 
       * {
         -webkit-tap-highlight-color: transparent;
+        box-sizing: border-box;
       }
 
       html,
@@ -46,12 +53,12 @@
         height: 100%;
         overflow: hidden;
         color: var(--ink);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        font-feature-settings: "tnum" 1, "cv01" 1;
+        font-family: var(--mono);
+        font-feature-settings: "tnum" 1;
         touch-action: none;
         /* clean white backdrop */
         background:
-          radial-gradient(125% 95% at 50% 16%, #ffffff 0%, #ffffff 45%, #f4f6f7 100%);
+          radial-gradient(125% 95% at 50% 14%, #ffffff 0%, #ffffff 48%, #eef1f3 100%);
       }
 
       #app {
@@ -90,72 +97,80 @@
         border-color: var(--accent);
       }
 
-      /* --- Distance chip --- */
-      #chip {
+      /* --- Slim single-line mono top bar --- */
+      #hud {
         position: fixed;
+        top: calc(env(safe-area-inset-top, 0px) + 16px);
         left: 50%;
-        bottom: calc(env(safe-area-inset-bottom, 0px) + 26px);
         transform: translateX(-50%);
-        min-width: 188px;
-        padding: 14px 22px 13px;
-        border-radius: 22px;
-        background: var(--glass);
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        max-width: calc(100vw - 28px);
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 9px 15px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid var(--line);
         box-shadow:
-          0 1px 0 rgba(255, 255, 255, 0.08) inset,
-          0 14px 38px rgba(20, 22, 26, 0.28),
-          0 3px 10px rgba(20, 22, 26, 0.18);
-        backdrop-filter: blur(16px) saturate(1.2);
-        -webkit-backdrop-filter: blur(16px) saturate(1.2);
-        text-align: center;
+          0 1px 0 rgba(255, 255, 255, 0.8) inset,
+          0 6px 22px rgba(20, 22, 26, 0.08);
+        backdrop-filter: blur(14px) saturate(1.15);
+        -webkit-backdrop-filter: blur(14px) saturate(1.15);
+        white-space: nowrap;
         user-select: none;
         -webkit-user-select: none;
         overflow: hidden;
       }
 
-      #chip-primary {
-        display: flex;
+      #hud .led {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--accent);
+        opacity: 0.3;
+        flex: none;
+        transition: opacity 0.4s ease, box-shadow 0.4s ease;
+      }
+      #hud .led.on {
+        opacity: 1;
+        box-shadow: 0 0 0 4px var(--accent-soft);
+      }
+
+      .stat {
+        display: inline-flex;
         align-items: baseline;
-        justify-content: center;
-        gap: 5px;
-        line-height: 1;
+        gap: 4px;
+        font-size: 13px;
+        font-weight: 500;
       }
-      #dist-value {
-        font-size: 44px;
-        font-weight: 600;
-        letter-spacing: -0.02em;
-        color: #ffffff;
-      }
-      #dist-unit {
+      .stat b {
+        font-weight: 700;
         font-size: 15px;
-        font-weight: 500;
-        color: rgba(255, 255, 255, 0.5);
-        letter-spacing: 0.01em;
+        letter-spacing: -0.01em;
+        color: var(--ink);
+        font-variant-numeric: tabular-nums;
       }
-      #chip-secondary {
-        margin-top: 7px;
-        font-size: 12.5px;
-        font-weight: 500;
-        color: rgba(255, 255, 255, 0.52);
-        letter-spacing: 0.01em;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 9px;
+      .stat .u {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
       }
-      #chip-secondary .sep {
+      .dot-sep {
         width: 3px;
         height: 3px;
         border-radius: 50%;
-        background: currentColor;
-        opacity: 0.45;
+        background: var(--ink);
+        opacity: 0.2;
+        flex: none;
       }
       .pulse {
-        color: var(--accent);
+        color: var(--accent) !important;
         transition: color 0.5s ease;
       }
 
-      /* hold-to-reset ring */
+      /* hold-to-reset fill */
       #reset-ring {
         position: absolute;
         inset: 0;
@@ -168,33 +183,35 @@
         opacity: 1;
       }
 
-      /* --- Coach hint --- */
+      /* --- Coach hint (bottom) --- */
       #hint {
         position: fixed;
         left: 50%;
-        top: calc(env(safe-area-inset-top, 0px) + 28px);
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 26px);
         transform: translateX(-50%);
-        padding: 9px 16px;
+        padding: 10px 18px;
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.66);
-        border: 1px solid var(--hair);
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid var(--line);
         backdrop-filter: blur(10px);
         -webkit-backdrop-filter: blur(10px);
-        font-size: 13px;
+        font-family: var(--mono);
+        font-size: 11.5px;
         font-weight: 500;
+        letter-spacing: 0.04em;
         color: var(--muted);
-        letter-spacing: 0.01em;
+        text-transform: uppercase;
         white-space: nowrap;
         transition: opacity 0.5s ease, transform 0.5s ease;
         pointer-events: none;
       }
       #hint.hidden {
         opacity: 0;
-        transform: translateX(-50%) translateY(-8px);
+        transform: translateX(-50%) translateY(8px);
       }
       #hint b {
         color: var(--ink);
-        font-weight: 600;
+        font-weight: 700;
       }
     </style>
   </head>
@@ -202,20 +219,17 @@
     <div id="app"></div>
     <div id="touch-layer"></div>
 
-    <div id="hint">Place <b>two fingers</b> on the belt and step</div>
-
-    <div id="chip">
+    <div id="hud">
       <div id="reset-ring"></div>
-      <div id="chip-primary">
-        <span id="dist-value">0</span>
-        <span id="dist-unit">ft</span>
-      </div>
-      <div id="chip-secondary">
-        <span id="dist-mi">0.00 mi</span>
-        <span class="sep"></span>
-        <span id="steps">0 steps</span>
-      </div>
+      <span class="led" id="live"></span>
+      <span class="stat"><b id="dist-value">0</b><span class="u" id="dist-unit">ft</span></span>
+      <span class="dot-sep"></span>
+      <span class="stat"><b id="dist-mi">0.00</b><span class="u">mi</span></span>
+      <span class="dot-sep"></span>
+      <span class="stat"><b id="steps">0</b><span class="u">steps</span></span>
     </div>
+
+    <div id="hint">Place <b>two fingers</b> &amp; step</div>
 
     <script type="module">
       // Dynamic import so the offline bundle can swap in a blob URL.
@@ -231,7 +245,8 @@
       const distMiEl = document.getElementById("dist-mi");
       const stepsEl = document.getElementById("steps");
       const hintEl = document.getElementById("hint");
-      const chipEl = document.getElementById("chip");
+      const hudEl = document.getElementById("hud");
+      const liveEl = document.getElementById("live");
       const resetRing = document.getElementById("reset-ring");
 
       const dotA = document.createElement("div");
@@ -248,7 +263,7 @@
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.enabled = false;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 0.94;
@@ -275,10 +290,9 @@
       const BODY_L = BELT_L + 2 * CAP_L; // ≈ 2.9
       const beltTopY = DECK_H + 0.022; // belt sits proud above the deck border
 
-      // 3/4 view from above and in front (+Z). Generic frustum fit below.
-      const VIEW_DIR = new THREE.Vector3(0.14, 0.96, 1.0).normalize();
-      const fitTarget = new THREE.Vector3(0, DECK_H * 0.5, -0.02);
-      const fitRadius = Math.hypot(BODY_W * 0.5, BODY_L * 0.5) * 1.02;
+      // Vertical, head-on view (no slant). Slight elevation for a touch of depth.
+      const VIEW_DIR = new THREE.Vector3(0, 0.17, 1.0).normalize();
+      const fitTarget = new THREE.Vector3(0, 0.14, 0.07);
 
       function fitCameraToPad() {
         const aspect = window.innerWidth / window.innerHeight;
@@ -294,22 +308,26 @@
         const xAxis = new THREE.Vector3().crossVectors(worldUp, zAxis).normalize();
         const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis).normalize();
 
-        // 8 corners of the pad bounding box (centered on fitTarget-ish origin)
-        const hx = BODY_W * 0.5 + 0.02;
-        const hy = (DECK_H + 0.08) * 0.5;
-        const hz = BODY_L * 0.5 + 0.02;
-        const cy = (DECK_H + 0.08) * 0.5;
+        // bounding box of the upright pad: wide=X, tall=Y, shallow depth=Z
+        const c0 = new THREE.Vector3(0, 0, 0.07);
+        const hx = BODY_W * 0.5 + 0.03;
+        const hy = BODY_L * 0.5 + 0.03;
+        const hz = 0.13;
         let need = 0;
         for (const sx of [-1, 1])
           for (const sy of [-1, 1])
             for (const sz of [-1, 1]) {
-              const v = new THREE.Vector3(sx * hx, cy + sy * hy - fitTarget.y, sz * hz);
+              const v = new THREE.Vector3(
+                c0.x + sx * hx - fitTarget.x,
+                c0.y + sy * hy - fitTarget.y,
+                c0.z + sz * hz - fitTarget.z
+              );
               const cx = v.dot(xAxis);
               const cyy = v.dot(yAxis);
               const cz = v.dot(zAxis);
               need = Math.max(need, Math.abs(cx) / tanH + cz, Math.abs(cyy) / tanV + cz);
             }
-        const dist = need * 1.08;
+        const dist = need * 1.16; // extra padding leaves breathing room for the HUD
         camera.position.copy(fitTarget).addScaledVector(zAxis, dist);
         camera.lookAt(fitTarget);
         camera.updateProjectionMatrix();
@@ -321,44 +339,31 @@
       scene.add(new THREE.AmbientLight(0xffffff, 0.5));
       scene.add(new THREE.HemisphereLight(0xffffff, 0xdfe4ea, 0.42));
 
-      const key = new THREE.DirectionalLight(0xffffff, 1.45);
+      const key = new THREE.DirectionalLight(0xffffff, 1.5);
       key.castShadow = true;
       key.shadow.mapSize.set(2048, 2048);
       key.shadow.camera.near = 0.5;
-      key.shadow.camera.far = 18;
-      key.shadow.camera.left = -2.2;
-      key.shadow.camera.right = 2.2;
-      key.shadow.camera.top = 2.2;
-      key.shadow.camera.bottom = -2.2;
+      key.shadow.camera.far = 16;
+      key.shadow.camera.left = -1.6;
+      key.shadow.camera.right = 1.6;
+      key.shadow.camera.top = 2.0;
+      key.shadow.camera.bottom = -2.0;
       key.shadow.bias = -0.0004;
-      key.shadow.radius = 7;
-      key.position.set(2.6, 5.2, 2.2);
-      key.target.position.set(0, 0, 0);
+      key.shadow.radius = 8;
+      key.position.set(1.6, 2.4, 4.2); // front-top → casts a soft shadow onto the backdrop
+      key.target.position.set(0, -0.2, 0);
       scene.add(key);
       scene.add(key.target);
 
-      const fill = new THREE.DirectionalLight(0xeef3f8, 0.4);
-      fill.position.set(-3, 2, 3.5);
+      const fill = new THREE.DirectionalLight(0xeef3f8, 0.42);
+      fill.position.set(-3, 1, 3.5);
       scene.add(fill);
-
-      // ---------------------------------------------------------------
-      // Floor — transparent shadow catcher so the white page shows through
-      // (clean product-shot look: black pad floating on white)
-      // ---------------------------------------------------------------
-      const floor = new THREE.Mesh(
-        new THREE.PlaneGeometry(40, 40),
-        new THREE.ShadowMaterial({ opacity: 0.18 })
-      );
-      floor.rotation.x = -Math.PI / 2;
-      floor.position.y = 0;
-      floor.receiveShadow = true;
-      scene.add(floor);
 
       // ---------------------------------------------------------------
       // Walking pad
       // ---------------------------------------------------------------
       const padGroup = new THREE.Group();
-      padGroup.rotation.y = 0.015;
+      padGroup.rotation.x = Math.PI / 2; // stand the flat-built pad upright
       scene.add(padGroup);
 
       const bodyMat = new THREE.MeshStandardMaterial({
@@ -387,20 +392,54 @@
         metalness: 0.08,
       });
 
-      // main chassis slab
-      const chassis = new THREE.Mesh(new THREE.BoxGeometry(BODY_W, DECK_H, BODY_L), bodyMat);
-      chassis.position.y = DECK_H * 0.5;
-      chassis.castShadow = true;
-      chassis.receiveShadow = true;
+      // ---- rounded-rect slab helper (width X, length Z, height Y; bottom at y=0) ----
+      function roundedRectShape(w, l, r) {
+        r = Math.min(r, w / 2, l / 2);
+        const s = new THREE.Shape();
+        const x = -w / 2;
+        const y = -l / 2;
+        s.moveTo(x + r, y);
+        s.lineTo(x + w - r, y);
+        s.quadraticCurveTo(x + w, y, x + w, y + r);
+        s.lineTo(x + w, y + l - r);
+        s.quadraticCurveTo(x + w, y + l, x + w - r, y + l);
+        s.lineTo(x + r, y + l);
+        s.quadraticCurveTo(x, y + l, x, y + l - r);
+        s.lineTo(x, y + r);
+        s.quadraticCurveTo(x, y, x + r, y);
+        return s;
+      }
+      function roundedSlab(w, l, h, r, bevel) {
+        bevel = Math.min(bevel == null ? 0.012 : bevel, h * 0.45);
+        const geo = new THREE.ExtrudeGeometry(roundedRectShape(w, l, r), {
+          depth: Math.max(0.001, h - bevel * 2),
+          bevelEnabled: true,
+          bevelThickness: bevel,
+          bevelSize: bevel,
+          bevelSegments: 3,
+          curveSegments: 12,
+        });
+        geo.rotateX(-Math.PI / 2); // shape plane → floor; extrude → vertical (Y)
+        geo.computeBoundingBox();
+        geo.translate(0, -geo.boundingBox.min.y, 0); // seat bottom at y=0
+        geo.computeVertexNormals();
+        return geo;
+      }
+
+      // main chassis slab (rounded outer corners + softened top edges)
+      const chassis = new THREE.Mesh(
+        roundedSlab(BODY_W, BODY_L, DECK_H, 0.085, 0.014),
+        bodyMat
+      );
+      chassis.position.y = 0;
       padGroup.add(chassis);
 
       // thin matte top border around the belt
       const topPlate = new THREE.Mesh(
-        new THREE.BoxGeometry(BODY_W - 0.01, 0.012, BODY_L - 0.01),
+        roundedSlab(BODY_W - 0.014, BODY_L - 0.014, 0.014, 0.072, 0.005),
         borderMat
       );
-      topPlate.position.y = DECK_H + 0.006;
-      topPlate.receiveShadow = true;
+      topPlate.position.y = DECK_H - 0.002;
       padGroup.add(topPlate);
 
       // ---------------------------------------------------------------
@@ -485,17 +524,19 @@
       makeRail(-(BELT_W * 0.5 + RAIL_W * 0.5 + 0.004));
       makeRail(BELT_W * 0.5 + RAIL_W * 0.5 + 0.004);
 
-      // end caps (housings over the rollers); front (far) is the console end
+      // end caps (housings over the rollers); front (far) is the console end.
+      // Narrower than the body so the chassis's rounded frame shows around them.
       function makeCap(z, h) {
-        const cap = new THREE.Mesh(new THREE.BoxGeometry(BODY_W - 0.008, h, CAP_L), capMat);
-        cap.position.set(0, DECK_H + h * 0.5 - 0.01, z);
-        cap.castShadow = true;
-        cap.receiveShadow = true;
+        const cap = new THREE.Mesh(
+          roundedSlab(BODY_W - 0.17, CAP_L, h, 0.045, 0.012),
+          capMat
+        );
+        cap.position.set(0, DECK_H - 0.004, z);
         padGroup.add(cap);
         return cap;
       }
-      const frontCap = makeCap(-(BELT_L * 0.5 + CAP_L * 0.5 - 0.01), 0.058);
-      makeCap(BELT_L * 0.5 + CAP_L * 0.5 - 0.01, 0.044);
+      const frontCap = makeCap(-(BELT_L * 0.5 + CAP_L * 0.5 - 0.01), 0.062);
+      makeCap(BELT_L * 0.5 + CAP_L * 0.5 - 0.01, 0.048);
 
       // rounded belt ends (the belt wrapping over the rollers)
       const rollerGeo = new THREE.CylinderGeometry(0.043, 0.043, BELT_W, 30);
@@ -695,10 +736,10 @@
         clearTimeout(resetTimer);
         resetRing.classList.remove("arming");
       }
-      chipEl.addEventListener("pointerdown", armReset);
-      chipEl.addEventListener("pointerup", cancelReset);
-      chipEl.addEventListener("pointerleave", cancelReset);
-      chipEl.addEventListener("pointercancel", cancelReset);
+      hudEl.addEventListener("pointerdown", armReset);
+      hudEl.addEventListener("pointerup", cancelReset);
+      hudEl.addEventListener("pointerleave", cancelReset);
+      hudEl.addEventListener("pointercancel", cancelReset);
 
       // ---------------------------------------------------------------
       // Hint
@@ -720,16 +761,9 @@
       function renderMetrics() {
         const feet = Math.max(0, distanceFeet);
         const miles = feet / FEET_PER_MILE;
-        if (miles >= 1) {
-          distValueEl.textContent = miles.toFixed(2);
-          distUnitEl.textContent = "mi";
-          distMiEl.textContent = `${formatNumber(feet)} ft`;
-        } else {
-          distValueEl.textContent = formatNumber(feet);
-          distUnitEl.textContent = "ft";
-          distMiEl.textContent = `${miles.toFixed(2)} mi`;
-        }
-        stepsEl.textContent = `${formatNumber(stepCount)} step${stepCount === 1 ? "" : "s"}`;
+        distValueEl.textContent = formatNumber(feet);
+        distMiEl.textContent = miles.toFixed(2);
+        stepsEl.textContent = formatNumber(stepCount);
 
         if (stepCount !== lastShownStep) {
           lastShownStep = stepCount;
@@ -773,6 +807,7 @@
 
         // display glows a touch brighter as you pick up the pace
         console_.material.emissiveIntensity = 0.42 + Math.min(beltSpeed, 6) * 0.05;
+        liveEl.classList.toggle("on", beltSpeed > 0.06);
 
         // ----- distance integration from glide -----
         if (beltSpeed > 0.02) {
