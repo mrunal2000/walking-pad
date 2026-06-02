@@ -7,6 +7,15 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
     />
     <title>Walking Pad</title>
+    <meta name="description" content="Finger-walk on a 3D walking pad. Drag to move the belt." />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Walking Pad" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
     <meta name="ext-resource-dependency" content="https://unpkg.com/three@0.165.0/build/three.module.js" data-resource-id="three" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -550,19 +559,93 @@
       bottomRoller.castShadow = true;
       padGroup.add(bottomRoller);
 
-      // slim glowing display embedded in the front (far) console cap
-      const console_ = new THREE.Mesh(
-        new THREE.BoxGeometry(0.3, 0.01, 0.055),
+      // Lit LCD console — centered on the front cap (like a real walking pad).
+      const displayCanvas = document.createElement("canvas");
+      displayCanvas.width = 160;
+      displayCanvas.height = 72;
+      const displayCtx = displayCanvas.getContext("2d");
+
+      function drawDisplayScreen(mph, active) {
+        const w = displayCanvas.width;
+        const h = displayCanvas.height;
+        displayCtx.fillStyle = active ? "#061018" : "#040608";
+        displayCtx.fillRect(0, 0, w, h);
+        // subtle scanlines
+        for (let y = 0; y < h; y += 3) {
+          displayCtx.fillStyle = "rgba(0,0,0,0.12)";
+          displayCtx.fillRect(0, y, w, 1);
+        }
+        // vignette
+        const vig = displayCtx.createRadialGradient(w / 2, h / 2, 8, w / 2, h / 2, w * 0.55);
+        vig.addColorStop(0, "rgba(77,212,224,0.06)");
+        vig.addColorStop(1, "rgba(0,0,0,0.35)");
+        displayCtx.fillStyle = vig;
+        displayCtx.fillRect(0, 0, w, h);
+
+        const glow = active ? "#5ee8f0" : "#2a8890";
+        displayCtx.shadowColor = glow;
+        displayCtx.shadowBlur = active ? 10 : 4;
+        displayCtx.fillStyle = glow;
+        displayCtx.textAlign = "center";
+        displayCtx.textBaseline = "middle";
+        displayCtx.font = "600 28px ui-monospace, SFMono-Regular, Menlo, monospace";
+        displayCtx.fillText(mph.toFixed(1), w / 2, h / 2 - 4);
+        displayCtx.shadowBlur = 0;
+        displayCtx.font = "500 11px ui-monospace, SFMono-Regular, Menlo, monospace";
+        displayCtx.fillStyle = active ? "#7ad4dc" : "#3d6a70";
+        displayCtx.fillText("MPH", w / 2, h / 2 + 18);
+        displayCtx.shadowBlur = 0;
+      }
+      drawDisplayScreen(0, false);
+
+      const displayTexture = new THREE.CanvasTexture(displayCanvas);
+      displayTexture.colorSpace = THREE.SRGBColorSpace;
+
+      const screenMat = new THREE.MeshStandardMaterial({
+        map: displayTexture,
+        emissive: 0x3ec8d4,
+        emissiveMap: displayTexture,
+        emissiveIntensity: 0.55,
+        roughness: 0.32,
+        metalness: 0.08,
+      });
+
+      const displayGroup = new THREE.Group();
+      displayGroup.position.set(0, DECK_H + 0.056, frontCap.position.z);
+
+      const displayBezel = new THREE.Mesh(
+        new THREE.BoxGeometry(0.38, 0.018, 0.1),
         new THREE.MeshStandardMaterial({
-          color: 0x9fd0d4,
-          emissive: 0x53a0a6,
-          emissiveIntensity: 0.5,
-          roughness: 0.35,
-          metalness: 0.2,
+          color: 0x08090c,
+          roughness: 0.72,
+          metalness: 0.22,
         })
       );
-      console_.position.set(0, DECK_H + 0.05, frontCap.position.z + 0.02);
-      padGroup.add(console_);
+      displayBezel.castShadow = true;
+      displayGroup.add(displayBezel);
+
+      const displayGlass = new THREE.Mesh(
+        new THREE.BoxGeometry(0.31, 0.007, 0.082),
+        screenMat
+      );
+      displayGlass.position.y = 0.007;
+      displayGroup.add(displayGlass);
+
+      // faint status LED left of the screen
+      const statusLed = new THREE.Mesh(
+        new THREE.CircleGeometry(0.008, 16),
+        new THREE.MeshStandardMaterial({
+          color: 0x3dff9a,
+          emissive: 0x1a9955,
+          emissiveIntensity: 0.2,
+          roughness: 0.4,
+        })
+      );
+      statusLed.rotation.x = -Math.PI / 2;
+      statusLed.position.set(-0.17, 0.011, 0);
+      displayGroup.add(statusLed);
+
+      padGroup.add(displayGroup);
 
       fitCameraToPad();
 
@@ -805,13 +888,19 @@
         topRoller.rotation.x = beltOffset * 6.0;
         bottomRoller.rotation.x = beltOffset * 6.0;
 
-        // display glows a touch brighter as you pick up the pace
-        console_.material.emissiveIntensity = 0.42 + Math.min(beltSpeed, 6) * 0.05;
-        liveEl.classList.toggle("on", beltSpeed > 0.06);
+        const mph = beltSpeed * UNITS_TO_MPH;
+        const displayActive = beltSpeed > 0.06;
+        drawDisplayScreen(mph, displayActive);
+        displayTexture.needsUpdate = true;
+        screenMat.emissiveIntensity = displayActive
+          ? 0.75 + Math.min(beltSpeed, 6) * 0.07
+          : 0.38;
+        statusLed.material.emissiveIntensity = displayActive ? 0.85 : 0.15;
+        statusLed.material.color.setHex(displayActive ? 0x5dffb0 : 0x2a5c40);
+        liveEl.classList.toggle("on", displayActive);
 
         // ----- distance integration from glide -----
         if (beltSpeed > 0.02) {
-          const mph = beltSpeed * UNITS_TO_MPH;
           const feetPerSec = (mph * FEET_PER_MILE) / 3600;
           distanceFeet += feetPerSec * dt;
           scheduleSave();
@@ -829,6 +918,13 @@
         fitCameraToPad();
       }
       window.addEventListener("resize", onResize);
+    </script>
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("./sw.js").catch(() => {});
+        });
+      }
     </script>
   </body>
 </html>
